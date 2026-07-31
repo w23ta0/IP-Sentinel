@@ -326,23 +326,21 @@ do_interactive_setup() {
         ENABLE_GOOGLE="true"
         ENABLE_TRUST="true"
 
-        echo -e "\n[4/7] 是否接入 Master 司令部进行远程联控？ (y/n)"
-        read -p "请输入选择 [y/n] (默认y): " TG_CHOICE
-        TG_CHOICE=${TG_CHOICE:-y}
-        
-        TG_TOKEN=""
-        CHAT_ID=""
-        AGENT_PORT="9527"
+        echo -e "\n[4/7] 是否接入 Master 司令部进行远程联控？ (已切换为无交互默认: y)"
+        TG_CHOICE="${TG_CHOICE:-y}"
+        echo -e "   选择: ${TG_CHOICE}"
+
+        TG_TOKEN="${TG_TOKEN:-}"
+        CHAT_ID="${CHAT_ID:-}"
+        AGENT_PORT="${AGENT_PORT:-9527}"
         if [[ "$TG_CHOICE" =~ ^[Yy]$ ]]; then
-            echo -e "\n请选择中枢接入模式 (推荐私有部署，支持后续 OTA 远程静默升级):"
-            echo "  1) 🛡️ 私有独立中枢 (需提供自建 Bot Token，推荐)"
-            echo "  2) ☁️ 官方公共网关 (@OmniBeacon_bot，新手免配置)"
-            read -p "请输入选择 [1-2] (默认1): " MASTER_TYPE
-            MASTER_TYPE=${MASTER_TYPE:-1}
-            
+            MASTER_TYPE="${MASTER_TYPE:-1}"
+            echo -e "\n请选择中枢接入模式 (已切换为无交互默认): ${MASTER_TYPE}"
+            echo "  ${MASTER_TYPE}) $( [ "$MASTER_TYPE" == "2" ] && echo '☁️ 官方公共网关 (@OmniBeacon_bot，新手免配置)' || echo '🛡️ 私有独立中枢 (需提供自建 Bot Token，推荐)' )"
+
             if [ "$MASTER_TYPE" == "2" ]; then
-                TG_TOKEN="OFFICIAL_GATEWAY_MODE" 
-                TG_API_URL="https://omni-gateway.samanthaestime296.workers.dev" 
+                TG_TOKEN="OFFICIAL_GATEWAY_MODE"
+                TG_API_URL="https://omni-gateway.samanthaestime296.workers.dev"
                 ENABLE_OTA="false"
                 echo -e "\033[32m✅ 已自动连接官方安全网关 (@OmniBeacon_bot)。\033[0m"
                 echo -e "\033[33m👉 请确保您已在 TG 中关注官方机器人并发送过 /start，否则将无法接收消息。\033[0m"
@@ -350,23 +348,18 @@ do_interactive_setup() {
                 echo -e "\033[33m由于您使用了官方公共网关，为防止潜在的滥用或供应链风险，本节点的 [OTA 远程升级] 权限已被系统底层强制禁用。\033[0m"
                 echo -e "\033[33m💡 若未来需要启用 OTA，请自建私有中枢后重新部署本节点。\033[0m"
             else
-                echo -e "\n\033[36m📘 私有 Bot 创建教程: \033[4m\033]8;;https://blog.iot-architect.com/engineering-practice/create-private-telegram-bot-via-botfather/\033\\👉 [点击此处直接在浏览器中打开]\033]8;;\033\\ 👈\033[0m"
-                echo -e "\033[90m   (若您的终端较老不支持点击，请手动复制: https://blog.iot-architect.com/engineering-practice/create-private-telegram-bot-via-botfather/ )\033[0m"
-                read -p "请输入您的私有 Telegram Bot Token: " RAW_TOKEN
-                USER_TOKEN=$(echo "$RAW_TOKEN" | tr -cd 'a-zA-Z0-9_:-')
-                while [ -z "$USER_TOKEN" ]; do
-                    read -p "⚠️ Token 不能为空或包含非法字符，请重新输入: " RAW_TOKEN
-                    USER_TOKEN=$(echo "$RAW_TOKEN" | tr -cd 'a-zA-Z0-9_:-')
-                done
-                
-                TG_TOKEN="$USER_TOKEN"
+                TG_TOKEN="$(echo "${TG_TOKEN}" | tr -cd 'a-zA-Z0-9_:-')"
+                if [ -z "$TG_TOKEN" ]; then
+                    echo -e "\033[31m❌ 私有中枢模式需要预设环境变量 TG_TOKEN。\033[0m"
+                    echo -e "   示例：export TG_TOKEN=\"123456:ABC-DEF...\""
+                    exit 1
+                fi
                 TG_API_URL="https://api.telegram.org/bot${TG_TOKEN}/sendMessage"
-                echo -e "\033[32m✅ 已记录您的私有机器人 Token。\033[0m"
-                
+                echo -e "\033[32m✅ 已读取私有机器人 Token。\033[0m"
+
+                ENABLE_OTA="${ENABLE_OTA:-true}"
                 echo -e "\n\033[36m[4.1/7] OTA 远程静默升级授权\033[0m"
-                echo -e "💡 开启后，您可以在 TG 面板一键将本节点热更新至最新版本。"
-                read -p "是否允许本节点接收 OTA 升级指令？(y/n, 默认y): " OTA_CHOICE
-                if [[ "$OTA_CHOICE" =~ ^[Nn]$ ]]; then
+                if [[ "$ENABLE_OTA" =~ ^([Nn]|false|FALSE|0)$ ]]; then
                     ENABLE_OTA="false"
                     echo -e "🛡️ \033[33m已关闭 OTA 权限，本节点未来将只能通过 SSH 手动升级。\033[0m"
                 else
@@ -375,12 +368,13 @@ do_interactive_setup() {
                 fi
             fi
 
-            echo -e "\n\033[33m💡 提示：如果您不知道下方自己的 Chat ID 是什么，可以关注 @userinfobot 获取。\033[0m"
-            echo -e "\033[36m📘 查看图文教程: \033[4m\033]8;;https://blog.iot-architect.com/engineering-practice/get-telegram-personal-id-via-userinfobot/\033\\👉 [点击此处直接在浏览器中打开]\033]8;;\033\\ 👈\033[0m"
-            echo -e "\033[90m   (若您的终端较老不支持点击，请手动复制: https://blog.iot-architect.com/engineering-practice/get-telegram-personal-id-via-userinfobot/ )\033[0m"
-            read -p "请输入你的 Chat ID (必须准确，否则无法联控): " RAW_CHAT_ID
-            CHAT_ID=$(echo "$RAW_CHAT_ID" | tr -cd '0-9-')
-            
+            if [ -z "$CHAT_ID" ]; then
+                echo -e "\033[31m❌ 需要预设环境变量 CHAT_ID 才能进行远程联控。\033[0m"
+                echo -e "   示例：export CHAT_ID=\"123456789\""
+                exit 1
+            fi
+            CHAT_ID="$(echo "$CHAT_ID" | tr -cd '0-9-')"
+
             echo -e "\n\033[36m[4.2/7] 正在构建 Webhook 安全通信隧道...\033[0m"
             echo -n "🎲 正在探测可用随机端口..."
             while true; do
@@ -391,29 +385,9 @@ do_interactive_setup() {
                 echo -n "."
             done
             echo -e " 完成！"
-            
-            echo -e "💡 系统为您生成的推荐随机高位端口为: \033[32m$RANDOM_PORT\033[0m"
+            AGENT_PORT="$RANDOM_PORT"
+            echo -e "💡 系统为您生成的推荐随机高位端口为: \033[32m$AGENT_PORT\033[0m"
             echo -e "\033[33m(该端口已通过本地占用校验，可直接使用)\033[0m"
-            
-            while true; do
-                read -p "请输入 Webhook 监听端口 (回车采用推荐, 或手动输入): " INPUT_PORT
-                
-                if [ -z "$INPUT_PORT" ]; then
-                    AGENT_PORT="$RANDOM_PORT"
-                    break
-                else
-                    if [[ "$INPUT_PORT" =~ ^[0-9]+$ ]] && [ "$INPUT_PORT" -ge 1 ] && [ "$INPUT_PORT" -le 65535 ]; then
-                        if (ss -tuln 2>/dev/null | grep -q ":$INPUT_PORT " || netstat -tuln 2>/dev/null | grep -q ":$INPUT_PORT "); then
-                            echo -e "\033[31m❌ 端口 $INPUT_PORT 已被占用，请重新输入或使用推荐端口。\033[0m"
-                        else
-                            AGENT_PORT="$INPUT_PORT"
-                            break
-                        fi
-                    else
-                        echo -e "\033[31m❌ 输入非法！端口范围应为 1-65535。\033[0m"
-                    fi
-                fi
-            done
             echo -e "✅ 已锁定 Webhook 通讯端口: \033[32m$AGENT_PORT\033[0m"
         fi
     fi

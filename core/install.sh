@@ -451,21 +451,21 @@ if [ "$UPGRADE_MODE" == "false" ]; then
     ENABLE_GOOGLE="true"
     ENABLE_TRUST="true"
 
-    echo -e "\n[4/7] 是否接入 Master 司令部进行远程联控？ (y/n)"
-    read -p "请输入选择 [y/n] (默认n): " TG_CHOICE
-    TG_TOKEN=""
-    CHAT_ID=""
-    AGENT_PORT="9527"
+    echo -e "\n[4/7] 是否接入 Master 司令部进行远程联控？ (已切换为无交互默认: y)"
+    TG_CHOICE="${TG_CHOICE:-y}"
+    echo -e "   选择: ${TG_CHOICE}"
+    TG_TOKEN="${TG_TOKEN:-}"
+    CHAT_ID="${CHAT_ID:-}"
+    AGENT_PORT="${AGENT_PORT:-9527}"
+
     if [[ "$TG_CHOICE" =~ ^[Yy]$ ]]; then
-        echo -e "\n请选择中枢接入模式 (推荐私有部署，支持后续 OTA 远程静默升级):"
-        echo "  1) 🛡️ 私有独立中枢 (需提供自建 Bot Token，推荐)"
-        echo "  2) ☁️ 官方公共网关 (@OmniBeacon_bot，新手免配置)"
-        read -p "请输入选择 [1-2] (默认1): " MASTER_TYPE
-        MASTER_TYPE=${MASTER_TYPE:-1}
-        
+        MASTER_TYPE="${MASTER_TYPE:-1}"
+        echo -e "\n请选择中枢接入模式 (已切换为无交互默认): ${MASTER_TYPE}"
+        echo "  ${MASTER_TYPE}) $( [ "$MASTER_TYPE" == "2" ] && echo '☁️ 官方公共网关 (@OmniBeacon_bot，新手免配置)' || echo '🛡️ 私有独立中枢 (需提供自建 Bot Token，推荐)' )"
+
         if [ "$MASTER_TYPE" == "2" ]; then
-            TG_TOKEN="OFFICIAL_GATEWAY_MODE" 
-            TG_API_URL="https://omni-gateway.samanthaestime296.workers.dev" 
+            TG_TOKEN="OFFICIAL_GATEWAY_MODE"
+            TG_API_URL="https://omni-gateway.samanthaestime296.workers.dev"
             ENABLE_OTA="false"
             echo -e "\033[32m✅ 已自动连接官方安全网关 (@OmniBeacon_bot)。\033[0m"
             echo -e "\033[33m👉 请确保您已在 TG 中关注官方机器人并发送过 /start，否则将无法接收消息。\033[0m"
@@ -473,23 +473,18 @@ if [ "$UPGRADE_MODE" == "false" ]; then
             echo -e "\033[33m由于您使用了官方公共网关，为防止潜在的滥用或供应链风险，本节点的 [OTA 远程升级] 权限已被系统底层强制禁用。\033[0m"
             echo -e "\033[33m💡 若未来需要启用 OTA，请自建私有中枢后重新部署本节点。\033[0m"
         else
-            echo -e "\n\033[36m📘 私有 Bot 创建教程: \033[4m\033]8;;https://blog.iot-architect.com/engineering-practice/create-private-telegram-bot-via-botfather/\033\\👉 [点击此处直接在浏览器中打开]\033]8;;\033\\ 👈\033[0m"
-            echo -e "\033[90m   (若您的终端较老不支持点击，请手动复制: https://blog.iot-architect.com/engineering-practice/create-private-telegram-bot-via-botfather/ )\033[0m"
-            read -p "请输入您的私有 Telegram Bot Token: " RAW_TOKEN
-            USER_TOKEN=$(echo "$RAW_TOKEN" | tr -cd 'a-zA-Z0-9_:-')
-            while [ -z "$USER_TOKEN" ]; do
-                read -p "⚠️ Token 不能为空或包含非法字符，请重新输入: " RAW_TOKEN
-                USER_TOKEN=$(echo "$RAW_TOKEN" | tr -cd 'a-zA-Z0-9_:-')
-            done
-            
-            TG_TOKEN="$USER_TOKEN"
+            TG_TOKEN="$(echo "${TG_TOKEN}" | tr -cd 'a-zA-Z0-9_:-')"
+            if [ -z "$TG_TOKEN" ]; then
+                echo -e "\033[31m❌ 私有中枢模式需要预设环境变量 TG_TOKEN。\033[0m"
+                echo -e "   示例：export TG_TOKEN=\"123456:ABC-DEF...\""
+                exit 1
+            fi
             TG_API_URL="https://api.telegram.org/bot${TG_TOKEN}/sendMessage"
-            echo -e "\033[32m✅ 已记录您的私有机器人 Token。\033[0m"
-            
+            echo -e "\033[32m✅ 已读取私有机器人 Token。\033[0m"
+
+            ENABLE_OTA="${ENABLE_OTA:-true}"
             echo -e "\n\033[36m[4.1/7] OTA 远程静默升级授权\033[0m"
-            echo -e "💡 开启后，您可以在 TG 面板一键将本节点热更新至最新版本。"
-            read -p "是否允许本节点接收 OTA 升级指令？(y/n, 默认y): " OTA_CHOICE
-            if [[ "$OTA_CHOICE" =~ ^[Nn]$ ]]; then
+            if [[ "$ENABLE_OTA" =~ ^([Nn]|false|FALSE|0)$ ]]; then
                 ENABLE_OTA="false"
                 echo -e "🛡️ \033[33m已关闭 OTA 权限，本节点未来将只能通过 SSH 手动升级。\033[0m"
             else
@@ -498,12 +493,13 @@ if [ "$UPGRADE_MODE" == "false" ]; then
             fi
         fi
 
-        echo -e "\n\033[33m💡 提示：如果您不知道下方自己的 Chat ID 是什么，可以关注 @userinfobot 获取。\033[0m"
-        echo -e "\033[36m📘 查看图文教程: \033[4m\033]8;;https://blog.iot-architect.com/engineering-practice/get-telegram-personal-id-via-userinfobot/\033\\👉 [点击此处直接在浏览器中打开]\033]8;;\033\\ 👈\033[0m"
-        echo -e "\033[90m   (若您的终端较老不支持点击，请手动复制: https://blog.iot-architect.com/engineering-practice/get-telegram-personal-id-via-userinfobot/ )\033[0m"
-        read -p "请输入你的 Chat ID (必须准确，否则无法联控): " RAW_CHAT_ID
-        CHAT_ID=$(echo "$RAW_CHAT_ID" | tr -cd '0-9-')
-        
+        if [ -z "$CHAT_ID" ]; then
+            echo -e "\033[31m❌ 需要预设环境变量 CHAT_ID 才能进行远程联控。\033[0m"
+            echo -e "   示例：export CHAT_ID=\"123456789\""
+            exit 1
+        fi
+        CHAT_ID="$(echo "$CHAT_ID" | tr -cd '0-9-')"
+
         echo -e "\n\033[36m[4.2/7] 正在构建 Webhook 安全通信隧道...\033[0m"
         echo -n "🎲 正在探测可用随机端口..."
         while true; do
@@ -514,29 +510,7 @@ if [ "$UPGRADE_MODE" == "false" ]; then
             echo -n "."
         done
         echo -e " 完成！"
-        
-        echo -e "💡 系统为您生成的推荐随机高位端口为: \033[32m$RANDOM_PORT\033[0m"
-        echo -e "\033[33m(该端口已通过本地占用校验，可直接使用)\033[0m"
-        
-        while true; do
-            read -p "请输入 Webhook 监听端口 (回车采用推荐, 或手动输入): " INPUT_PORT
-            
-            if [ -z "$INPUT_PORT" ]; then
-                AGENT_PORT="$RANDOM_PORT"
-                break
-            else
-                if [[ "$INPUT_PORT" =~ ^[0-9]+$ ]] && [ "$INPUT_PORT" -ge 1 ] && [ "$INPUT_PORT" -le 65535 ]; then
-                    if (ss -tuln 2>/dev/null | grep -q ":$INPUT_PORT " || netstat -tuln 2>/dev/null | grep -q ":$INPUT_PORT "); then
-                        echo -e "\033[31m❌ 端口 $INPUT_PORT 已被占用，请重新输入或使用推荐端口。\033[0m"
-                    else
-                        AGENT_PORT="$INPUT_PORT"
-                        break
-                    fi
-                else
-                    echo -e "\033[31m❌ 输入非法！端口范围应为 1-65535。\033[0m"
-                fi
-            fi
-        done
+        AGENT_PORT="$RANDOM_PORT"
         echo -e "✅ 已锁定 Webhook 通讯端口: \033[32m$AGENT_PORT\033[0m"
     fi
 
@@ -578,36 +552,23 @@ if [ "$UPGRADE_MODE" == "false" ]; then
     [[ -n "$DETECT_V6" ]] && { IP_OPTIONS+=("$DETECT_V6"); IP_PROTO+=("6"); }
 
     if [ ${#IP_OPTIONS[@]} -eq 0 ]; then
-        echo -e "\033[33m⚠️ 雷达受阻：未能自动探测到公网 IP，请手动指定。\033[0m"
-        read -p "请输入您要绑定的公网 IP (v4 或 v6): " RAW_PUBLIC_IP
-        PUBLIC_IP=$(echo "$RAW_PUBLIC_IP" | tr -cd 'a-fA-F0-9.:[]')
-        [[ "$PUBLIC_IP" == *":"* ]] && IP_PREF="6" || IP_PREF="4"
-    else
-        echo "📍 发现可用出口 IP，请选择要注册与养护的锚点:"
-        for i in "${!IP_OPTIONS[@]}"; do
-            num=$((i+1))
-            if [ "${IP_PROTO[$i]}" == "4" ]; then
-                echo "  $num) 🌐 IPv4: ${IP_OPTIONS[$i]} (默认选项)"
-            else
-                echo "  $num) 🌌 IPv6: ${IP_OPTIONS[$i]}"
-            fi
-        done
-        CUSTOM_OPT=$(( ${#IP_OPTIONS[@]} + 1 ))
-        echo "  $CUSTOM_OPT) ✍️ 手动指定其他 IP (适合多 IP 站群机)"
-        
-        read -p "请输入选择 (默认1): " IP_CHOICE
-        IP_CHOICE=${IP_CHOICE:-1}
-        
-        if [ "$IP_CHOICE" -le "${#IP_OPTIONS[@]}" ] && [ "$IP_CHOICE" -gt 0 ]; then
-            idx=$((IP_CHOICE-1))
-            PUBLIC_IP="${IP_OPTIONS[$idx]}"
-            IP_PREF="${IP_PROTO[$idx]}"
-        elif [ "$IP_CHOICE" -eq "$CUSTOM_OPT" ]; then
-            read -p "请输入您要绑定的公网 IP (v4 或 v6): " PUBLIC_IP
+        if [[ -n "$PUBLIC_IP" ]]; then
+            PUBLIC_IP=$(echo "$PUBLIC_IP" | tr -cd 'a-fA-F0-9.:[]')
             [[ "$PUBLIC_IP" == *":"* ]] && IP_PREF="6" || IP_PREF="4"
+            echo -e "\033[33m⚠️ 雷达受阻：未能自动探测到公网 IP，使用预设 PUBLIC_IP。\033[0m"
+        else
+            echo -e "\033[31m❌ 雷达受阻：未能自动探测到公网 IP，且未设置环境变量 PUBLIC_IP。无法继续部署。\033[0m"
+            exit 1
+        fi
+    else
+        if [[ -n "$PUBLIC_IP" ]]; then
+            PUBLIC_IP=$(echo "$PUBLIC_IP" | tr -cd 'a-fA-F0-9.:[]')
+            [[ "$PUBLIC_IP" == *":"* ]] && IP_PREF="6" || IP_PREF="4"
+            echo -e "📍 使用预设公网 IP: $PUBLIC_IP"
         else
             PUBLIC_IP="${IP_OPTIONS[0]}"
             IP_PREF="${IP_PROTO[0]}"
+            echo -e "📍 已自动选择首个出口 IP: $PUBLIC_IP"
         fi
     fi
 
@@ -666,12 +627,11 @@ if [ "$UPGRADE_MODE" == "false" ]; then
     # [身份分离] 分离底层系统锚定的不可变主键，与暴露给上层展示的可变别名
     IP_HASH=$(echo "${SAFE_PUBLIC_IP:-127.0.0.1}" | md5sum | cut -c 1-4 | tr 'a-z' 'A-Z')
     NODE_NAME="$(hostname | tr -cd 'a-zA-Z0-9' | cut -c 1-10)-${IP_HASH}"
-    NODE_ALIAS="$NODE_NAME"
+    NODE_ALIAS="${NODE_ALIAS:-$NODE_NAME}"
 
     if [[ -n "$TG_TOKEN" ]] && [[ -n "$CHAT_ID" ]]; then
         echo -e "\n\033[36m[4.8/7] 节点展示别名设定 (用于面板友好显示)...\033[0m"
         echo -e "💡 系统底层的不可变主键为: \033[33m${NODE_NAME}\033[0m"
-        read -p "请输入节点展示别名 (如'纽约机房', 回车使用默认): " CUSTOM_ALIAS
 
         if [ -n "$CUSTOM_ALIAS" ]; then
             NODE_ALIAS=$(echo "$CUSTOM_ALIAS" | tr -d '"'\''\`\$\|&;<>\n\r' | cut -c 1-20)

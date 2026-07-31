@@ -41,36 +41,23 @@ do_network_probe() {
         [[ -n "$DETECT_V6" ]] && { IP_OPTIONS+=("$DETECT_V6"); IP_PROTO+=("6"); }
 
         if [ ${#IP_OPTIONS[@]} -eq 0 ]; then
-            echo -e "\033[33m⚠️ 雷达受阻：未能自动探测到公网 IP，请手动指定。\033[0m"
-            read -p "请输入您要绑定的公网 IP (v4 或 v6): " RAW_PUBLIC_IP
-            PUBLIC_IP=$(echo "$RAW_PUBLIC_IP" | tr -cd 'a-fA-F0-9.:[]')
-            [[ "$PUBLIC_IP" == *":"* ]] && IP_PREF="6" || IP_PREF="4"
-        else
-            echo "📍 发现可用出口 IP，请选择要注册与养护的锚点:"
-            for i in "${!IP_OPTIONS[@]}"; do
-                num=$((i+1))
-                if [ "${IP_PROTO[$i]}" == "4" ]; then
-                    echo "  $num) 🌐 IPv4: ${IP_OPTIONS[$i]} (默认选项)"
-                else
-                    echo "  $num) 🌌 IPv6: ${IP_OPTIONS[$i]}"
-                fi
-            done
-            CUSTOM_OPT=$(( ${#IP_OPTIONS[@]} + 1 ))
-            echo "  $CUSTOM_OPT) ✍️ 手动指定其他 IP (适合多 IP 站群机)"
-            
-            read -p "请输入选择 (默认1): " IP_CHOICE
-            IP_CHOICE=${IP_CHOICE:-1}
-            
-            if [ "$IP_CHOICE" -le "${#IP_OPTIONS[@]}" ] && [ "$IP_CHOICE" -gt 0 ]; then
-                idx=$((IP_CHOICE-1))
-                PUBLIC_IP="${IP_OPTIONS[$idx]}"
-                IP_PREF="${IP_PROTO[$idx]}"
-            elif [ "$IP_CHOICE" -eq "$CUSTOM_OPT" ]; then
-                read -p "请输入您要绑定的公网 IP (v4 或 v6): " PUBLIC_IP
+            if [[ -n "$PUBLIC_IP" ]]; then
+                PUBLIC_IP=$(echo "$PUBLIC_IP" | tr -cd 'a-fA-F0-9.:[]')
                 [[ "$PUBLIC_IP" == *":"* ]] && IP_PREF="6" || IP_PREF="4"
+                echo -e "\033[33m⚠️ 雷达受阻：未能自动探测到公网 IP，使用预设 PUBLIC_IP。\033[0m"
+            else
+                echo -e "\033[31m❌ 雷达受阻：未能自动探测到公网 IP，且未设置环境变量 PUBLIC_IP。无法继续部署。\033[0m"
+                exit 1
+            fi
+        else
+            if [[ -n "$PUBLIC_IP" ]]; then
+                PUBLIC_IP=$(echo "$PUBLIC_IP" | tr -cd 'a-fA-F0-9.:[]')
+                [[ "$PUBLIC_IP" == *":"* ]] && IP_PREF="6" || IP_PREF="4"
+                echo -e "📍 使用预设公网 IP: $PUBLIC_IP"
             else
                 PUBLIC_IP="${IP_OPTIONS[0]}"
                 IP_PREF="${IP_PROTO[0]}"
+                echo -e "📍 已自动选择首个出口 IP: $PUBLIC_IP"
             fi
         fi
 
@@ -129,17 +116,16 @@ do_assemble_fallback() {
         # [身份分离] 分离底层系统锚定的不可变主键，与暴露给上层展示的可变别名
         IP_HASH=$(echo "${SAFE_PUBLIC_IP:-127.0.0.1}" | md5sum | cut -c 1-4 | tr 'a-z' 'A-Z')
         NODE_NAME="$(hostname | tr -cd 'a-zA-Z0-9' | cut -c 1-10)-${IP_HASH}"
-        NODE_ALIAS="$NODE_NAME"
+        NODE_ALIAS="${NODE_ALIAS:-$NODE_NAME}"
 
         if [[ -n "$TG_TOKEN" ]] && [[ -n "$CHAT_ID" ]]; then
             echo -e "\n\033[36m[4.8/7] 节点展示别名设定 (用于面板友好显示)...\033[0m"
             echo -e "💡 系统底层的不可变主键为: \033[33m${NODE_NAME}\033[0m"
-            read -p "请输入节点展示别名 (如'纽约机房', 回车使用默认): " CUSTOM_ALIAS
 
-            if [ -n "$CUSTOM_ALIAS" ]; then
+            if [[ "$NODE_ALIAS" != "$NODE_NAME" ]]; then
                 # 挂载 UTF-8 环境，防止原生 Bash 在 C Locale 下对多字节汉字进行错误截断
                 export LC_ALL=C.UTF-8 2>/dev/null || export LC_ALL=en_US.UTF-8 2>/dev/null || true
-                CLEAN_ALIAS=$(echo "$CUSTOM_ALIAS" | tr -d '"'\''\`\$\|&;<>\n\r')
+                CLEAN_ALIAS=$(echo "$NODE_ALIAS" | tr -d '"'\''\`\$\|&;<>\n\r')
                 NODE_ALIAS="${CLEAN_ALIAS:0:20}"
                 [ -z "$NODE_ALIAS" ] && NODE_ALIAS="$NODE_NAME"
             fi
